@@ -3,5 +3,10 @@
 /target
 /.idea
 /.vs
+/.metadata
+/discordBot/.settings
+
+.classpath
+.project
 
 bot.properties
