@@ -19,6 +19,7 @@ public class CommandManager extends ListenerAdapter {
 	
 	public void contruct() {
 		commands.add(new HelpCommand());
+		commands.add(new PrefixCommand());
 
 		DiscordBot.INSTANCE.getShardManager().getShards().forEach(shard -> {
 			CommandListUpdateAction commup = shard.updateCommands();
