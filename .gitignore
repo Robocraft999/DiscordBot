@@ -5,8 +5,11 @@
 /.vs
 /.metadata
 /.settings
+/.dbeaver
+/Scripts
 
 .classpath
 .project
 
 bot.properties
+data.db
