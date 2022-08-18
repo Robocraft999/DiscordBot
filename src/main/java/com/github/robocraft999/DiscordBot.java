@@ -10,6 +10,7 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.sql.SQLException;
 import java.util.EnumSet;
 import java.util.Properties;
 
@@ -19,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.robocraft999.modules.commands.CommandManager;
+import com.github.robocraft999.util.SQLite;
 
 import net.dv8tion.jda.api.OnlineStatus;
 import net.dv8tion.jda.api.entities.Activity;
@@ -36,6 +38,7 @@ public class DiscordBot {
 	private boolean isDev;
 	private ShardManager shardManager;
 	private CommandManager cmdManager;
+	private SQLite sqlite;
 	public Thread activityloop;
 	private final String[] STATI = { "%members Mitglieder" };
 
@@ -60,6 +63,17 @@ public class DiscordBot {
 		}
 
 		initialize(prop);
+		this.shardManager.getGuilds().forEach(gu -> {//TODO move to own function
+
+			Long id = gu.getIdLong();
+			try {
+				if(!this.getSqlite().onQuery("SELECT * FROM guilds WHERE guild_id = " + id).next())
+					this.getSqlite().onUpdate("INSERT INTO guilds(guild_id) VALUES(" + id + ")");
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+
+		});
 		awaitReady();
 		
 		startShutdownThread();
@@ -91,13 +105,15 @@ public class DiscordBot {
 		builder.setStatus(OnlineStatus.ONLINE);
 		
 		this.cmdManager = new CommandManager();
-		
 		builder.addEventListeners(cmdManager);
 
 		this.shardManager = builder.build();
 	}
 	
 	private void contructManagers() {
+		this.sqlite = new SQLite();
+		sqlite.connect();
+		
 		this.cmdManager.contruct();
 	}
 
@@ -147,6 +163,7 @@ public class DiscordBot {
 		if (this.shardManager != null) {
 			this.shardManager.setStatus(OnlineStatus.OFFLINE);
 			this.shardManager.shutdown();
+			getSqlite().disconnect();
 		}
 
 		if (activityloop != null) {
@@ -208,5 +225,9 @@ public class DiscordBot {
 
 	public CommandManager getCmdManager() {
 		return cmdManager;
+	}
+	
+	public SQLite getSqlite() {
+		return sqlite;
 	}
 }
