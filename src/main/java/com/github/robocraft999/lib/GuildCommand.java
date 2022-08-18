@@ -11,6 +11,13 @@ public abstract class GuildCommand extends BasicCommand{
 		super(command, description);
 	}
 
+	/**
+	 * 
+	 * @param args list of arguments (first arg is command itself)
+	 * @param author member who sent the message
+	 * @param channel where the message was sent
+	 * @return return message
+	 */
 	public abstract Message perform(String[] args, Member author, TextChannel channel);
 	@Override
 	public Message perform(String[] args, User author, TextChannel channel) {
