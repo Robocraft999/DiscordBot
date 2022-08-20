@@ -1,11 +1,18 @@
 package com.github.robocraft999.modules.commands;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.concurrent.TimeUnit;
 
 import com.github.robocraft999.DiscordBot;
 import com.github.robocraft999.lib.BasicCommand;
 import com.github.robocraft999.lib.GuildCommand;
+import com.github.robocraft999.modules.general.ClearCommand;
+import com.github.robocraft999.modules.general.HelpCommand;
+import com.github.robocraft999.modules.general.PrefixCommand;
 
+import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.TextChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
@@ -20,6 +27,7 @@ public class CommandManager extends ListenerAdapter {
 	public void contruct() {
 		commands.add(new HelpCommand());
 		commands.add(new PrefixCommand());
+		commands.add(new ClearCommand());
 
 		DiscordBot.INSTANCE.getShardManager().getShards().forEach(shard -> {
 			CommandListUpdateAction commup = shard.updateCommands();
@@ -37,9 +45,17 @@ public class CommandManager extends ListenerAdapter {
 		switch (event.getChannelType()) {
 		case TEXT: {
 			try {
-				String prefix = "."; // change to database
+				String prefix = ".";
+				ResultSet set = DiscordBot.INSTANCE.getSqlite().onQuery(
+						"SELECT prefix " + 
+						"FROM guilds " + 
+						"WHERE guild_id = " + event.getGuild().getIdLong());
+				if(set != null) {
+					prefix = set.getString("prefix");
+				}
 				onGuildMessageReceived(event, message, prefix);
-			} catch (IllegalStateException e) {
+			} catch (IllegalStateException | SQLException e) {
+				e.printStackTrace();
 			}
 			break;
 		}
@@ -66,9 +82,18 @@ public class CommandManager extends ListenerAdapter {
 		if (message.startsWith(prefix) && message.length() != 0) {
 			String[] args = message.substring(prefix.length()).split(" ");
 			if (args.length > 0) {
-				for (BasicCommand cmd : commands) {
-					if (cmd.getCommand().equalsIgnoreCase(args[0])) {
-						channel.sendMessage(cmd.perform(args, event.getAuthor(), channel)).queue();
+				for (BasicCommand bc : commands) {
+					if (bc instanceof GuildCommand cmd && cmd.getCommand().equalsIgnoreCase(args[0])) {
+						Message msg = cmd.perform(args, event.getAuthor(), channel);
+						if(msg != null) {
+							String[] m = cmd.processDelayArg(msg.getContentRaw());//TODO maybe change to display
+							if(m.length == 2) {
+								int delay = Integer.parseInt(m[1]);
+								channel.sendMessage(m[0]).complete().delete().queueAfter(delay, TimeUnit.SECONDS);
+							}else
+								channel.sendMessage(m[0]).queue();
+						}
+						break;
 					}
 				}
 			}
