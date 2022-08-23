@@ -8,9 +8,12 @@ import java.util.concurrent.TimeUnit;
 import com.github.robocraft999.DiscordBot;
 import com.github.robocraft999.lib.BasicCommand;
 import com.github.robocraft999.lib.GuildCommand;
+import com.github.robocraft999.modules.channels.ChannelCommand;
 import com.github.robocraft999.modules.general.ClearCommand;
 import com.github.robocraft999.modules.general.HelpCommand;
 import com.github.robocraft999.modules.general.PrefixCommand;
+import com.github.robocraft999.modules.tiers.TierCommand;
+import com.github.robocraft999.modules.tiers.TierManager;
 
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.TextChannel;
@@ -28,6 +31,8 @@ public class CommandManager extends ListenerAdapter {
 		commands.add(new HelpCommand());
 		commands.add(new PrefixCommand());
 		commands.add(new ClearCommand());
+		commands.add(new TierCommand());
+		commands.add(new ChannelCommand());
 
 		DiscordBot.INSTANCE.getShardManager().getShards().forEach(shard -> {
 			CommandListUpdateAction commup = shard.updateCommands();
@@ -69,9 +74,15 @@ public class CommandManager extends ListenerAdapter {
 
 	@Override
 	public void onSlashCommandInteraction(SlashCommandInteractionEvent event) {
-		for (BasicCommand cmd : commands) {
-			if (cmd.getCommand().equalsIgnoreCase(event.getName())) {
-				cmd.performSlash(event);
+		event.deferReply();
+		for (BasicCommand bc : commands) {
+			if (bc instanceof GuildCommand cmd && cmd.getCommand().equalsIgnoreCase(event.getName())) {
+				if(TierManager.isRequiredLevel(TierManager.getLevelForMember(event.getMember()), cmd.getLevel()) || cmd.handlesAccessItself()){
+					cmd.performSlash(event);
+					break;
+				}else {
+					event.reply("Access Denied").queue();
+				}
 			}
 		}
 	}
@@ -84,16 +95,20 @@ public class CommandManager extends ListenerAdapter {
 			if (args.length > 0) {
 				for (BasicCommand bc : commands) {
 					if (bc instanceof GuildCommand cmd && cmd.getCommand().equalsIgnoreCase(args[0])) {
-						Message msg = cmd.perform(args, event.getAuthor(), channel);
-						if(msg != null) {
-							String[] m = cmd.processDelayArg(msg.getContentRaw());//TODO maybe change to display
-							if(m.length == 2) {
-								int delay = Integer.parseInt(m[1]);
-								channel.sendMessage(m[0]).complete().delete().queueAfter(delay, TimeUnit.SECONDS);
-							}else
-								channel.sendMessage(m[0]).queue();
+						if(TierManager.isRequiredLevel(TierManager.getLevelForMember(event.getMember()), cmd.getLevel()) || cmd.handlesAccessItself()){
+							Message msg = cmd.perform(args, event.getAuthor(), channel);
+							if(msg != null) {
+								String[] m = cmd.processDelayArg(msg.getContentRaw());//TODO maybe change to display
+								if(m.length == 2) {
+									int delay = Integer.parseInt(m[1]);
+									channel.sendMessage(m[0]).complete().delete().queueAfter(delay, TimeUnit.SECONDS);
+								}else
+									channel.sendMessage(m[0]).queue();
+							}
+							break;
+						}else {
+							channel.sendMessage("Access denied").queue();
 						}
-						break;
 					}
 				}
 			}
