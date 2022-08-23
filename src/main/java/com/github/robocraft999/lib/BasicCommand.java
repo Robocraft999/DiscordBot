@@ -1,12 +1,12 @@
 package com.github.robocraft999.lib;
 
-import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import net.dv8tion.jda.api.MessageBuilder;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.TextChannel;
 import net.dv8tion.jda.api.entities.User;
-import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 
 public abstract class BasicCommand{
@@ -28,19 +28,21 @@ public abstract class BasicCommand{
 	 */
 	public abstract Message perform(String[] args, User author, TextChannel channel);
 	
-	public void performSlash(SlashCommandInteractionEvent event) {
-		event.deferReply();
-		ArrayList<String> argsList = new ArrayList<>(event.getOptions().stream().map(om -> om.getAsString()).toList());
-		argsList.add(0, event.getName());
-		String[] args = argsList.toArray(new String[0]);
-		Message m = perform(args, event.getUser(), event.getChannel().asTextChannel());
-		if(!m.getContentRaw().isEmpty()) {
-			event.reply(m).queue();
-		}
+	protected Message msg(String msg) {
+		if(!msg.isBlank())
+			return new MessageBuilder(msg).build();
+		else
+			return null;
 	}
 	
-	protected Message msg(String msg) {
-		return new MessageBuilder(msg).build();
+	public String[] processDelayArg(String m) {
+		if(m.startsWith("%d")) {
+			String[] msgParts = m.split(" ", 2);
+			String[] res = {msgParts[1], msgParts[0].substring(2)};
+			return res;
+		}
+		String[] res = {m};
+		return res;
 	}
 	
 	public String getCommand() {
@@ -48,7 +50,8 @@ public abstract class BasicCommand{
 	}
 
 	public String getDescription() {
-		return description;
+		List<String> descAddition = Arrays.asList(getOptions()).stream().map(od -> od.getName()).toList();
+		return descAddition.isEmpty() ? description : description + " [" + String.join("] [", descAddition) + "]";
 	}
 	
 	public OptionData[] getOptions() {
