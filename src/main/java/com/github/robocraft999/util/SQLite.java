@@ -16,7 +16,7 @@ public class SQLite {
 	private static Connection conn;
 	private static Statement stmt;
 	private static final String DB_PATH = "src/main/resources/data.db";
-	public Logger dblog = LoggerFactory.getLogger("DB-Log");
+	public Logger dblog = LoggerFactory.getLogger("Bot-Database");
 
 	public void connect() {
 		conn = null;
