@@ -19,10 +19,13 @@ import javax.security.auth.login.LoginException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.github.robocraft999.modules.channels.ChannelManager;
 import com.github.robocraft999.modules.commands.CommandManager;
+import com.github.robocraft999.modules.tiers.TierManager.Level;
 import com.github.robocraft999.util.SQLite;
 
 import net.dv8tion.jda.api.OnlineStatus;
+import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.sharding.DefaultShardManagerBuilder;
@@ -35,18 +38,19 @@ public class DiscordBot {
 
 	private final Logger logger = LoggerFactory.getLogger("Bot-Main");
 
-	private boolean isDev;
+	//private boolean isDev;
 	private ShardManager shardManager;
 	private CommandManager cmdManager;
+	private ChannelManager channelManager;
 	private SQLite sqlite;
 	public Thread activityloop;
-	private final String[] STATI = { "%members Mitglieder" };
+	private final String[] STATI = { "%members Mitgliedern", "%guilds Guilds"};
 
 	public static DiscordBot INSTANCE;
 
 	public DiscordBot(boolean isDev) {
 		INSTANCE = this;
-		this.isDev = isDev;
+		//this.isDev = isDev;
 
 		Properties prop = new Properties();
 		FileInputStream in;
@@ -63,18 +67,8 @@ public class DiscordBot {
 		}
 
 		initialize(prop);
-		this.shardManager.getGuilds().forEach(gu -> {//TODO move to own function
-
-			Long id = gu.getIdLong();
-			try {
-				if(!this.getSqlite().onQuery("SELECT * FROM guilds WHERE guild_id = " + id).next())
-					this.getSqlite().onUpdate("INSERT INTO guilds(guild_id) VALUES(" + id + ")");
-			} catch (SQLException e) {
-				e.printStackTrace();
-			}
-
-		});
 		awaitReady();
+		initDatabase();
 		
 		startShutdownThread();
 		startActivityThread();
@@ -106,6 +100,8 @@ public class DiscordBot {
 		
 		this.cmdManager = new CommandManager();
 		builder.addEventListeners(cmdManager);
+		this.channelManager = new ChannelManager();
+		builder.addEventListeners(channelManager);
 
 		this.shardManager = builder.build();
 	}
@@ -115,6 +111,30 @@ public class DiscordBot {
 		sqlite.connect();
 		
 		this.cmdManager.contruct();
+	}
+	
+	private void initDatabase() {
+		this.shardManager.getGuilds().forEach(gu -> {
+			Long id = gu.getIdLong();
+			try {
+				if(!this.getSqlite().onQuery("SELECT * FROM guilds WHERE guild_id = " + id).next())
+					this.getSqlite().onUpdate("INSERT INTO guilds(guild_id)" + " VALUES(" + id + ")");
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+			
+			gu.getRoles().forEach(r -> {
+				try {
+					if(!this.getSqlite().onQuery("SELECT * FROM tiers WHERE role_id = " + r.getIdLong()).next())
+						this.getSqlite().onUpdate("INSERT INTO tiers(role_id, role_name)" + " VALUES(" + r.getIdLong() + ", '" + r.getName() +"')");
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+				if(r.getPermissions().contains(Permission.ADMINISTRATOR)) {
+					this.getSqlite().onUpdate("UPDATE tiers SET level = '" + Level.HIGHEST + "' WHERE role_id = " + r.getIdLong());
+				}
+			});
+		});
 	}
 
 	private void generateConfigFile(File f) {
@@ -201,21 +221,27 @@ public class DiscordBot {
 			int index = 0;
 
 			while (true) {
-				if (System.currentTimeMillis() >= time + 1000) {
+				if (System.currentTimeMillis() >= time + 10000) {
 					time = System.currentTimeMillis();
 
-					shardManager.getShards().forEach(jda -> {
-						String text = STATI[index].replaceAll("%members", "" + jda.getUsers().size());
-
-						//jda.getPresence().setActivity(Activity.of(ActivityType.CUSTOM_STATUS, text));
-						jda.getPresence().setActivity(Activity.playing(text));
-					});
+					onActivityUpdate(index);
+					index = (index + 1) % STATI.length;
 				}
 			}
 
 		});
 		this.activityloop.setName("ActivityLoop");
 		this.activityloop.start();
+	}
+	
+	private void onActivityUpdate(int index) {
+		shardManager.getShards().forEach(jda -> {
+			String text = STATI[index].replaceAll("%members", "" + jda.getUsers().size());
+			text = text.replaceAll("%guilds", "" + jda.getGuilds().size());
+
+			//jda.getPresence().setActivity(Activity.of(ActivityType.CUSTOM_STATUS, text));
+			jda.getPresence().setActivity(Activity.listening(text));
+		});
 	}
 	
 	// ---------------------------Getters---------------------------
@@ -225,6 +251,10 @@ public class DiscordBot {
 
 	public CommandManager getCmdManager() {
 		return cmdManager;
+	}
+	
+	public ChannelManager getChannelManager() {
+		return channelManager;
 	}
 	
 	public SQLite getSqlite() {
